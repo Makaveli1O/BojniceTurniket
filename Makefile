@@ -2,4 +2,4 @@ install:
 	./install.sh
 
 run:
-	python3 qr_turnstile.py
+	python3 qr_gate_control.py

@@ -32,3 +32,9 @@ alebo priamo (neodporúčané)
 ```
 python3 qr_turnstile.py
 ```
+
+## Testovanie
+Pre testovanie (napr. na windows), treba:
+```
+make testrun
+```

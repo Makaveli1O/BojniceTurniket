@@ -31,4 +31,6 @@ def get_qr_codes():
     return jsonify({"qr_codes": QR_CODES})
 
 if __name__ == "__main__":
+    print("Test API is running on http://localhost:5000 🚀")
+    print("Valid QR codes:", ", ".join(QR_CODES))
     app.run(port=5000, debug=True)

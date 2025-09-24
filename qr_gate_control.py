@@ -4,80 +4,96 @@ import time
 try:
     from periphery.gpio import GPIO
 except ImportError:
-    from GPIOStub import GPIOStub as GPIO
-    
-
-API_URL = "http://localhost:5000/qr-codes"
-REFRESH_URL = "http://localhost:5000/refresh-token"
-TURNSTILE_PIN = 0
-
-ACCESS_TOKEN = "INITIAL_TOKEN"
-REFRESH_TOKEN = "REFRESH_TOKEN"
-QR_CODES_FIELD = "qr_codes"
-
-turnstile = GPIO(TURNSTILE_PIN, "out")
-turnstile.write(False)
-
-def get_headers():
-    return {"Authorization": f"Bearer {ACCESS_TOKEN}"}
-
-def refresh_access_token():
-    global ACCESS_TOKEN
-    try:
-        response = requests.post(REFRESH_URL, json={"refresh_token": REFRESH_TOKEN}, timeout=5)
-        response.raise_for_status()
-        data = response.json()
-        ACCESS_TOKEN = data["access_token"]
-        print("Access token refreshed 🔑")
-    except Exception as e:
-        print(f"Error refreshing token: {e}")
-
-def validate_qr(qr_code: str) -> bool:
-    """Downloads QRcodes list from API every time new QR code is proposed to scanner.
-    If access_token is invalid, refresh it.
-    Args:
-        qr_code (str): input QR
-
-    Returns:
-        bool: True if qr is valid, false otherwise.
+    """This is for testing purposes mostly on windows machines. For this script
+    to work, periphery.gpio library must be installed (it is linux onlny).
     """
-    global ACCESS_TOKEN
-    try:
-        response = requests.get(API_URL, headers=get_headers(), timeout=5)
-
-        if response.status_code in (401, 403):  # token expired
-            print("Access token expired, refreshing...")
-            refresh_access_token()
-            # retry once
-            response = requests.get(API_URL, headers=get_headers(), timeout=5)
-
-        response.raise_for_status()
-        data = response.json()
-        valid_qrs = data.get(QR_CODES_FIELD, [])
-        return qr_code in valid_qrs
-    except Exception as e:
-        print(f"Error validating QR: {e}")
-        return False
+    print("WARNING: Periphery.gpio module could not be resolved. ❌\n Running the script in test mode.\n")
+    from GPIOStub import GPIOStub as GPIO
 
 
-def open_turnstile():
-    print("Gate OPEN")
-    turnstile.write(True)
-    time.sleep(2)
-    turnstile.write(False)
+class TurnstileController:
+    def __init__(self, turnstile_pin: int, api_url: str, refresh_url: str,
+                 access_token: str, refresh_token: str, qr_codes_field: str = "qr_codes"):
+        try:
+            self.turnstile = GPIO(turnstile_pin, "out")
+        except:
+            print("ERROR: Could not access GPIO. Try running the script in sudo mode.❌\n")
+            exit()
 
-def main():
-    while True:
-        qr_code = input("Scan QR code: ").strip()
+        self.turnstile.write(False)
         
-        if validate_qr(qr_code):
-            print("QR code allowed ✅")
-            open_turnstile()
-        else:
-            print("QR code denied ❌")
+        self.api_url = api_url
+        self.refresh_url = refresh_url
+        self.access_token = access_token
+        self.refresh_token = refresh_token
+        self.qr_codes_field = qr_codes_field
+
+    def get_headers(self):
+        return {"Authorization": f"Bearer {self.access_token}"}
+
+    def refresh_access_token(self):
+        try:
+            response = requests.post(self.refresh_url, json={"refresh_token": self.refresh_token}, timeout=5)
+            response.raise_for_status()
+            data = response.json()
+            self.access_token = data["access_token"]
+            print("Access token refreshed 🔑")
+        except Exception as e:
+            print(f"Error refreshing token: {e}")
+
+    def validate_qr(self, qr_code: str) -> bool:
+        """Check QR code validity by fetching list from API."""
+        try:
+            response = requests.get(self.api_url, headers=self.get_headers(), timeout=5)
+
+            if response.status_code in (401, 403):
+                print("Access token expired, refreshing...")
+                self.refresh_access_token()
+                # retry once
+                response = requests.get(self.api_url, headers=self.get_headers(), timeout=5)
+
+            response.raise_for_status()
+            data = response.json()
+            valid_qrs = data.get(self.qr_codes_field, [])
+            return qr_code in valid_qrs
+        except Exception as e:
+            print(f"Error validating QR: {e}")
+            return False
+
+    def open_turnstile(self, duration: int = 2):
+        print("Gate OPEN")
+        self.turnstile.write(True)
+        time.sleep(duration)
+        self.turnstile.write(False)
+
+    def close(self):
+        self.turnstile.close()
+
+
+class QRScannerApp:
+    def __init__(self, controller: TurnstileController):
+        self.controller = controller
+
+    def run(self):
+        try:
+            while True:
+                qr_code = input("Scan QR code: ").strip()
+                if self.controller.validate_qr(qr_code):
+                    print("QR code allowed ✅")
+                    self.controller.open_turnstile()
+                else:
+                    print("QR code denied ❌")
+        finally:
+            self.controller.close()
+
 
 if __name__ == "__main__":
-    try:
-        main()
-    finally:
-        turnstile.close()
+    controller = TurnstileController(
+        turnstile_pin=0,
+        api_url="http://localhost:5000/qr-codes",
+        refresh_url="http://localhost:5000/refresh-token",
+        access_token="INITIAL_TOKEN",
+        refresh_token="REFRESH_TOKEN"
+    )
+    app = QRScannerApp(controller)
+    app.run()

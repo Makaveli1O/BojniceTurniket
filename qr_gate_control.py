@@ -1,66 +1,26 @@
-import requests
 import time
+import requests
 
 try:
     from periphery.gpio import GPIO
 except ImportError:
-    """This is for testing purposes mostly on windows machines. For this script
-    to work, periphery.gpio library must be installed (it is linux onlny).
-    """
-    print("WARNING: Periphery.gpio module could not be resolved. ❌\n Running the script in test mode.\n")
+    print("WARNING: Periphery.gpio module not found. Running in test mode. ❌\n")
     from GPIOStub import GPIOStub as GPIO
+
+from checkin_fetcher import GoOutAPIClient, CheckinExporter
+from ticket_checker import TicketExtractor, FileExporter 
 
 
 class TurnstileController:
-    def __init__(self, turnstile_pin: int, api_url: str, refresh_url: str,
-                 access_token: str, refresh_token: str, qr_codes_field: str = "qr_codes"):
+    def __init__(self, turnstile_pin: int):
         try:
             self.turnstile = GPIO(turnstile_pin, "out")
-        except:
-            print("ERROR: Could not access GPIO. Try running the script in sudo mode.❌\n")
-            exit()
-
+        except Exception:
+            print("ERROR: Could not access GPIO. Try running with sudo. ❌")
+            exit(1)
         self.turnstile.write(False)
-        
-        self.api_url = api_url
-        self.refresh_url = refresh_url
-        self.access_token = access_token
-        self.refresh_token = refresh_token
-        self.qr_codes_field = qr_codes_field
 
-    def get_headers(self):
-        return {"Authorization": f"Bearer {self.access_token}"}
-
-    def refresh_access_token(self):
-        try:
-            response = requests.post(self.refresh_url, json={"refresh_token": self.refresh_token}, timeout=5)
-            response.raise_for_status()
-            data = response.json()
-            self.access_token = data["access_token"]
-            print("Access token refreshed 🔑")
-        except Exception as e:
-            print(f"Error refreshing token: {e}")
-
-    def validate_qr(self, qr_code: str) -> bool:
-        """Check QR code validity by fetching list from API."""
-        try:
-            response = requests.get(self.api_url, headers=self.get_headers(), timeout=5)
-
-            if response.status_code in (401, 403):
-                print("Access token expired, refreshing...")
-                self.refresh_access_token()
-                # retry once
-                response = requests.get(self.api_url, headers=self.get_headers(), timeout=5)
-
-            response.raise_for_status()
-            data = response.json()
-            valid_qrs = data.get(self.qr_codes_field, [])
-            return qr_code in valid_qrs
-        except Exception as e:
-            print(f"Error validating QR: {e}")
-            return False
-
-    def open_turnstile(self, duration: int = 2):
+    def open_gate(self, duration: int = 2):
         print("Gate OPEN")
         self.turnstile.write(True)
         time.sleep(duration)
@@ -70,30 +30,79 @@ class TurnstileController:
         self.turnstile.close()
 
 
+class QRValidator:
+    """Validačný modul – aktualizuje a porovnáva QR kódy z API."""
+
+    def __init__(self, api_client: GoOutAPIClient, cache_file: str = "checkin_entries.json"):
+        self.api_client = api_client
+        self.cache_file = cache_file
+        self.valid_qr_codes = set()
+
+    def update_local_cache(self, pages: int | None = None):
+        """Načíta všetky záznamy z API alebo len posledné X strán."""
+        print("Sťahujem platné QR kódy z GoOut API...")
+        data = self.api_client.fetch_all_checkins()
+        CheckinExporter(self.cache_file).export_to_json(data)
+
+        extractor = TicketExtractor(self.cache_file)
+        self.valid_qr_codes = extractor.extract_ticket_ids()
+        print(f"Načítaných platných QR: {len(self.valid_qr_codes)} ✅")
+
+    def is_valid(self, qr_code: str) -> bool:
+        if qr_code in self.valid_qr_codes:
+            return True
+
+        print("⚠️ QR kód nenájdený – aktualizujem posledné 2 strany...")
+        new_data = self.api_client.fetch_last_pages(2)
+
+        if not new_data:
+            return False
+
+        extractor = TicketExtractor.from_data(new_data)
+        new_codes = extractor.extract_ticket_ids()
+        self.valid_qr_codes.update(new_codes)
+
+        return qr_code in self.valid_qr_codes
+
+
+
 class QRScannerApp:
-    def __init__(self, controller: TurnstileController):
+    def __init__(self, controller: TurnstileController, validator: QRValidator):
         self.controller = controller
+        self.validator = validator
 
     def run(self):
+        self.validator.update_local_cache()
         try:
             while True:
                 qr_code = input("Scan QR code: ").strip()
-                if self.controller.validate_qr(qr_code):
-                    print("QR code allowed ✅")
-                    self.controller.open_turnstile()
+                if not qr_code:
+                    continue
+
+                if self.validator.is_valid(qr_code):
+                    print("✅ QR code allowed")
+                    self.controller.open_gate()
                 else:
-                    print("QR code denied ❌")
+                    # self.validator.update_local_cache()
+                    print("❌ QR code denied")
+
+        except KeyboardInterrupt:
+            print("\nUkončené používateľom.")
         finally:
             self.controller.close()
 
 
 if __name__ == "__main__":
-    controller = TurnstileController(
-        turnstile_pin=0,
-        api_url="http://localhost:5000/qr-codes",
-        refresh_url="http://localhost:5000/refresh-token",
-        access_token="INITIAL_TOKEN",
-        refresh_token="REFRESH_TOKEN"
+    api_client = GoOutAPIClient(
+        base_url="https://goout.net/services/entitystore/v1/checkin-entries",
+        token="YOUR_TOKEN",
+        refresh_url="https://goout.net/services/user/v3/refresh-tokens",
+        refresh_token="YOUR_REFRESH_TOKEN"
     )
-    app = QRScannerApp(controller)
+
+    controller = TurnstileController(turnstile_pin=0)
+    validator = QRValidator(api_client)
+
+    app = QRScannerApp(controller, validator)
     app.run()
+

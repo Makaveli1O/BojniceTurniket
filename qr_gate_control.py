@@ -1,5 +1,6 @@
 import time
 import requests
+from typing import Optional
 
 try:
     from periphery.gpio import GPIO
@@ -8,7 +9,7 @@ except ImportError:
     from GPIOStub import GPIOStub as GPIO
 
 from checkin_fetcher import GoOutAPIClient, CheckinExporter
-from ticket_checker import TicketExtractor, FileExporter 
+from ticket_checker import TicketExtractor, FileExporter
 
 
 class TurnstileController:
@@ -38,7 +39,7 @@ class QRValidator:
         self.cache_file = cache_file
         self.valid_qr_codes = set()
 
-    def update_local_cache(self, pages: int | None = None):
+    def update_local_cache(self, pages: Optional[int] = None):
         """Načíta všetky záznamy z API alebo len posledné X strán."""
         print("Sťahujem platné QR kódy z GoOut API...")
         data = self.api_client.fetch_all_checkins()
@@ -54,16 +55,13 @@ class QRValidator:
 
         print("⚠️ QR kód nenájdený – aktualizujem posledné 2 strany...")
         new_data = self.api_client.fetch_last_pages(2)
-
         if not new_data:
             return False
 
         extractor = TicketExtractor.from_data(new_data)
         new_codes = extractor.extract_ticket_ids()
         self.valid_qr_codes.update(new_codes)
-
         return qr_code in self.valid_qr_codes
-
 
 
 class QRScannerApp:
@@ -83,7 +81,6 @@ class QRScannerApp:
                     print("✅ QR code allowed")
                     self.controller.open_gate()
                 else:
-                    # self.validator.update_local_cache()
                     print("❌ QR code denied")
 
         except KeyboardInterrupt:
@@ -102,7 +99,5 @@ if __name__ == "__main__":
 
     controller = TurnstileController(turnstile_pin=0)
     validator = QRValidator(api_client)
-
     app = QRScannerApp(controller, validator)
     app.run()
-

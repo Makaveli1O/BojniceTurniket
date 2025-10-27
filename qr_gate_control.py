@@ -92,9 +92,9 @@ class QRScannerApp:
 if __name__ == "__main__":
     api_client = GoOutAPIClient(
         base_url="https://goout.net/services/entitystore/v1/checkin-entries",
-        token="YOUR_TOKEN",
+        token="eyJhbGciOiJIUzUxMiJ9.eyJpYXQiOjE3NjE1NzgyOTYsInN1YiI6IjM2OTQ4NDkifQ.30gTaik-K4elsqV8iyfMKFdlPqWwN87b2y2qAgCrJx9iG03lNqU2Y6Fxa-EdE_xPTSRnZvPXx90PDrUM7OXOQQ",
         refresh_url="https://goout.net/services/user/v3/refresh-tokens",
-        refresh_token="YOUR_REFRESH_TOKEN"
+        refresh_token="eyJhbGciOiJIUzUxMiJ9.eyJpYXQiOjE3NjE1NzgyOTYsInN1YiI6IjM2OTQ4NDkifQ.Wply03BsAwr7ESq3FMAcb-MIOS4z5y3qyEEqH6J_FAFVrS4egWr9rqmKNTRJLBRvnADfYjr3sjn4SnbX5SXzAw"
     )
 
     controller = TurnstileController(turnstile_pin=0)

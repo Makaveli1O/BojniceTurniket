@@ -3,9 +3,9 @@ import requests
 from typing import Optional
 
 try:
-    from periphery.gpio import GPIO
+    import mraa
 except ImportError:
-    print("WARNING: Periphery.gpio module not found. Running in test mode. ❌\n")
+    print("WARNING: mraa gpio module not found. Running in test mode. ❌\n")
     from GPIOStub import GPIOStub as GPIO
 
 from checkin_fetcher import GoOutAPIClient, CheckinExporter
@@ -15,20 +15,21 @@ from ticket_checker import TicketExtractor, FileExporter
 class TurnstileController:
     def __init__(self, turnstile_pin: int):
         try:
-            self.turnstile = GPIO(turnstile_pin, "out")
+            self.turnstile = mraa.Gpio(turnstile_pin)
+            # self.turnstile.dir(mraa.DIR_OUT) # set mode as input
         except Exception:
             print("ERROR: Could not access GPIO. Try running with sudo. ❌")
             exit(1)
-        self.turnstile.write(False)
+        self.turnstile.write(0)
 
     def open_gate(self, duration: int = 2):
         print("Gate OPEN")
-        self.turnstile.write(True)
+        self.turnstile.write(1)
         time.sleep(duration)
-        self.turnstile.write(False)
+        self.turnstile.write(0)
 
     def close(self):
-        self.turnstile.close()
+        self.turnstile.write(0)
 
 
 class QRValidator:
@@ -92,9 +93,9 @@ class QRScannerApp:
 if __name__ == "__main__":
     api_client = GoOutAPIClient(
         base_url="https://goout.net/services/entitystore/v1/checkin-entries",
-        token="eyJhbGciOiJIUzUxMiJ9.eyJpYXQiOjE3NjE1NzgyOTYsInN1YiI6IjM2OTQ4NDkifQ.30gTaik-K4elsqV8iyfMKFdlPqWwN87b2y2qAgCrJx9iG03lNqU2Y6Fxa-EdE_xPTSRnZvPXx90PDrUM7OXOQQ",
+        token="YOUR_TOKEN",
         refresh_url="https://goout.net/services/user/v3/refresh-tokens",
-        refresh_token="eyJhbGciOiJIUzUxMiJ9.eyJpYXQiOjE3NjE1NzgyOTYsInN1YiI6IjM2OTQ4NDkifQ.Wply03BsAwr7ESq3FMAcb-MIOS4z5y3qyEEqH6J_FAFVrS4egWr9rqmKNTRJLBRvnADfYjr3sjn4SnbX5SXzAw"
+        refresh_token="YOUR_REFRESH_TOKEN"
     )
 
     controller = TurnstileController(turnstile_pin=0)

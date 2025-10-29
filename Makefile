@@ -11,8 +11,8 @@ deps:
 api: deps
 	$(PYTHON) $(API)
 
-run: deps
-	$(PYTHON) $(APP)
+run:
+	sudo -E python qr_gate_control.py
 
 testrun: deps
 	$(PYTHON) $(API) & \

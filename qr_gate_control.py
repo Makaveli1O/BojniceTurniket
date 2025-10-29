@@ -18,7 +18,7 @@ class TurnstileController:
             self.turnstile = mraa.Gpio(turnstile_pin)
             # self.turnstile.dir(mraa.DIR_OUT) # set mode as input
         except Exception:
-            print("ERROR: Could not access GPIO. Try running with sudo. ❌")
+            print("ERROR: Could not access GPIO. Try running with sudo. Or try different pin ❌")
             exit(1)
         self.turnstile.write(0)
 
@@ -98,7 +98,7 @@ if __name__ == "__main__":
         refresh_token="YOUR_REFRESH_TOKEN"
     )
 
-    controller = TurnstileController(turnstile_pin=0)
+    controller = TurnstileController(turnstile_pin=16)
     validator = QRValidator(api_client)
     app = QRScannerApp(controller, validator)
     app.run()

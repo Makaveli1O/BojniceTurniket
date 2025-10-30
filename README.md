@@ -10,7 +10,7 @@ Jednoduchá Python aplikácia pre Rockchip (napr. ROCK Pi), ktorá:
 
 - Rockchip SBC s Ubuntu/Debian
 - Python 3.8+
-- pripojený turniket na GPIO pin (default: `PIN=0`)
+- pripojený turniket na GPIO pin (default: `PIN=16`)
 - prístup k API (endpoint + refresh token)
 
 ## Inštalácia
